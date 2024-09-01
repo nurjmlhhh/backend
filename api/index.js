@@ -144,11 +144,8 @@ app.post("/api/class", authenticateToken, authenticateTeacher,async (req, res) =
     }
 });
 
-  
-
-
-app.get("/api/class", authenticateToken, authenticateTeacher,async (req, res) => {
-    const result = await pool.query("SELECT * FROM class");
+app.get("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
+    const result = await pool.query("SELECT * FROM class where id_teacher=$1", [req.params.id]);
     res.json(result.rows);
 });
 
@@ -159,7 +156,6 @@ app.put("/api/class/:id", authenticateToken, authenticateTeacher, async (req, re
     );
     res.json("Class berhasil di update");
 });
-
 
 
 app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
@@ -186,18 +182,12 @@ app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req,
 });
 
   
-app.get("/api/posts/:id_class", authenticateToken, async (req, res) => {
-    try {
-        console.log("id_class received:", req.params.id_class); // Debugging
 
-        const result = await pool.query("SELECT * FROM post WHERE id_class=$1", [req.params.id_class]);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching posts:', error);
-        res.status(500).send("Terjadi kesalahan saat mengambil data post.");
-    }
+
+app.get("/api/posts/:id", authenticateToken,async (req, res) => {
+    const result = await pool.query("SELECT * FROM post where id_class=$1", [req.params.id]);
+    res.json(result.rows);
 });
-
 
 app.put("/api/post/:id", authenticateToken, async (req, res) => {
     await pool.query(
