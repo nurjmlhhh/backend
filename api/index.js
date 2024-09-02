@@ -149,19 +149,66 @@ app.get("/api/class/:id", authenticateToken, authenticateTeacher, async (req, re
     res.json(result.rows);
 });
 
-app.put("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
-    await pool.query(
-        "UPDATE class SET name = $1, kode = $2 WHERE id = $3",
-        [req.body.name, req.body.kode, req.params.id]
-    );
-    res.json("Class berhasil di update");
+// app.put("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
+//     await pool.query(
+//         "UPDATE class SET name = $1, kode = $2 WHERE id = $3",
+//         [req.body.name, req.body.kode, req.params.id]
+//     );
+//     res.json("Class berhasil di update");
+// });
+
+app.put("/api/class/:id", authenticateToken, async (req, res) => {
+    try {
+        const { name, kode } = req.body;
+        const { id } = req.params;
+
+        await pool.query(
+            "UPDATE class SET name = $1, kode = $2 WHERE id = $3",
+            [name, kode, id]
+        );
+
+        res.status(200).json({ message: "Class berhasil diupdate" });
+    } catch (error) {
+        console.error("Error updating class:", error.message);
+        res.status(500).json({ error: "Gagal memperbarui class" });
+    }
 });
 
 
+
+// app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
+//     await pool.query("DELETE FROM class WHERE id = $1", [req.params.id]);
+//     res.send("Class berhasil dihapus");
+//   });
+
 app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
-    await pool.query("DELETE FROM class WHERE id = $1", [req.params.id]);
-    res.send("Class berhasil dihapus");
-  });
+    const client = await pool.connect(); // Menggunakan client untuk transaksi
+
+    try {
+        const { id } = req.params;
+
+        await client.query("BEGIN"); // Memulai transaksi
+
+        // Hapus semua tasks yang terkait dengan kelas
+        await client.query("DELETE FROM task WHERE id_class = $1", [id]);
+
+        // Hapus semua posts yang terkait dengan kelas
+        await client.query("DELETE FROM post WHERE id_class = $1", [id]);
+
+        // Hapus kelas itu sendiri
+        await client.query("DELETE FROM class WHERE id = $1", [id]);
+
+        await client.query("COMMIT"); // Commit transaksi jika semua berhasil
+
+        res.status(200).json({ message: "Class dan semua data terkait berhasil dihapus" });
+    } catch (error) {
+        await client.query("ROLLBACK"); // Rollback transaksi jika terjadi error
+        console.error("Error deleting class and related data:", error.message);
+        res.status(500).json({ error: "Gagal menghapus class dan data terkait" });
+    } finally {
+        client.release(); // Pastikan client dirilis setelah transaksi selesai
+    }
+});
 
 //---------------------------------MANIPULASI Post---------------------------------
 
@@ -206,20 +253,37 @@ app.delete("/api/post/:id", authenticateToken, async (req, res) => {
   
 
 //---------------------------------MANIPULASI TASK---------------------------------
-app.post("/api/add-task", async (req, res) =>{
-    const result = await pool.query(
-        "INSERT INTO task (title, deskripsi, deadline) VALUES ($1, $2, $3) RETURNING *",
-        [req.body.title, req.body.deskripsi, req.body.deadline]
-    );
-    res.json(result.rows[0]);
+// app.post("/api/task", async (req, res) =>{
+//     const result = await pool.query(
+//         "INSERT INTO task (title, deskripsi, deadline, id_class) VALUES ($1, $2, $3) RETURNING *",
+//         [req.body.title, req.body.deskripsi, req.body.deadline]
+//     );
+//     res.json(result.rows[0]);
+// });
+
+app.post("/api/task", authenticateToken ,async (req, res) => {
+    const { title, deskripsi, deadline, id_class } = req.body;
+    const idClass = id_class; // Mengambil id_teacher dari token JWT
+
+    try {
+        const result = await pool.query(
+            "INSERT INTO task (title, deskripsi, deadline, id_class) VALUES ($1, $2, $3, $4) RETURNING *",
+            [title, deskripsi, deadline, idClass]
+        );
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error inserting post:', error);
+        res.status(500).send("Terjadi kesalahan saat menambahkan kelas.");
+    }
 });
 
-app.get("/api/task", async (req, res) => {
-    const result = await pool.query("SELECT * FROM task");
+
+app.get("/api/task/:id", async (req, res) => {
+    const result = await pool.query("SELECT * FROM task WHERE id_class=$1", [req.params.id]);
     res.json(result.rows);
 });
 
-app.put("/api/update-task/:id", async (req, res) => {
+app.put("/api/task/:id", async (req, res) => {
     await pool.query(
         "UPDATE task SET title = $1, deskripsi = $2, deadline = $3 WHERE id = $4",
         [req.body.title, req.body.deskripsi, req.body.deadline, req.params.id]
@@ -227,7 +291,7 @@ app.put("/api/update-task/:id", async (req, res) => {
     res.send("task berhasil di update");
 });
 
-app.delete("/api/detele-task/:id", async (req, res) => {
+app.delete("/api/task/:id", async (req, res) => {
     await pool.query("DELETE FROM task WHERE id = $1", [req.params.id]);
     res.send("task berhasil di detele");
 });
