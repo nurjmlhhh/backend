@@ -62,14 +62,7 @@ function authenticateToken(req, res, next) {
     }
 }
 
-// Middleware untuk Verifikasi Teacher
-// function authenticateTeacher(req, res, next) {
-//     if (req.user.role === 'teacher') {
-//       next();
-//     } else {
-//       res.status(403).send("Hanya teacher yang bisa menambahkan kelas");
-//     }
-// }
+
 
 // Endpoint untuk Login
 app.post("/api/login", async (req, res) => {
@@ -110,15 +103,6 @@ app.post("/api/login", async (req, res) => {
         res.status(500).send("Terjadi kesalahan saat login.");
     }
 });
-
-
-// function authenticateTeacher(req, res, next) {
-//     if (req.user.role === 'teacher') {
-//       next();
-//     } else {
-//       res.status(403).send("Hanya teacher yang bisa menambahkan kelas");
-//     }
-//   }
 
 
 //---------------------------------MANIPULASI USERS---------------------------------
@@ -171,13 +155,7 @@ app.delete("/api/users/:id", authenticateToken, async (req, res) => {
 
 
 //---------------------------------MANIPULASI CLASS---------------------------------
-// app.post("/api/class", async (req, res) =>{
-//     const result = await pool.query(
-//         "INSERT INTO class (name, kode) VALUES ($1, $2) RETURNING *",
-//         [req.body.name, req.body.kode]
-//     );
-//     res.json(result.rows[0]);
-// });
+
 
 app.post("/api/class", authenticateToken, async (req, res) => {
     const { name, kode, id_teacher } = req.body;
@@ -200,13 +178,7 @@ app.get("/api/class/:id", authenticateToken, async (req, res) => {
     res.json(result.rows);
 });
 
-// app.put("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
-//     await pool.query(
-//         "UPDATE class SET name = $1, kode = $2 WHERE id = $3",
-//         [req.body.name, req.body.kode, req.params.id]
-//     );
-//     res.json("Class berhasil di update");
-// });
+
 
 app.put("/api/class/:id", authenticateToken, async (req, res) => {
     try {
@@ -227,10 +199,6 @@ app.put("/api/class/:id", authenticateToken, async (req, res) => {
 
 
 
-// app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
-//     await pool.query("DELETE FROM class WHERE id = $1", [req.params.id]);
-//     res.send("Class berhasil dihapus");
-//   });
 
 app.delete("/api/class/:id", authenticateToken, async (req, res) => {
     const client = await pool.connect(); // Menggunakan client untuk transaksi
@@ -280,9 +248,6 @@ app.delete("/api/class/:id", authenticateToken, async (req, res) => {
 });
 
 
-  
-
-
 app.get("/api/posts/:id", authenticateToken,async (req, res) => {
     const result = await pool.query("SELECT * FROM post where id_class=$1", [req.params.id]);
     res.json(result.rows);
@@ -297,7 +262,6 @@ app.put("/api/post/:id", authenticateToken, async (req, res) => {
 });
 
 
-
 app.delete("/api/post/:id", authenticateToken, async (req, res) => {
     await pool.query("DELETE FROM post WHERE id = $1", [req.params.id]);
     res.send("post berhasil dihapus");
@@ -305,13 +269,6 @@ app.delete("/api/post/:id", authenticateToken, async (req, res) => {
   
 
 //---------------------------------MANIPULASI TASK---------------------------------
-// app.post("/api/task", async (req, res) =>{
-//     const result = await pool.query(
-//         "INSERT INTO task (title, deskripsi, deadline, id_class) VALUES ($1, $2, $3) RETURNING *",
-//         [req.body.title, req.body.deskripsi, req.body.deadline]
-//     );
-//     res.json(result.rows[0]);
-// });
 
 app.post("/api/task", authenticateToken ,async (req, res) => {
     const { title, deskripsi, deadline, id_class } = req.body;
@@ -347,73 +304,6 @@ app.delete("/api/task/:id", async (req, res) => {
     await pool.query("DELETE FROM task WHERE id = $1", [req.params.id]);
     res.send("task berhasil di detele");
 });
-
-
-//---------------------------------MANIPULASI STUDENT---------------------------------
-app.post("/api/add-student", async (req, res) =>{
-    const result = await pool.query(
-        "INSERT INTO enrollment (title, deskripsi, deadline) VALUES ($1, $2, $3) RETURNING *",
-        [req.body.title, req.body.deskripsi, req.body.deadline]
-    );
-    res.json(result.rows[0]);
-});
-
-app.get("/api/student", async (req, res) => {
-    const result = await pool.query("SELECT * FROM enrollment");
-    res.json(result.rows);
-});
-
-// app.put("/api/update-task/:id", async (req, res) => {
-//     await pool.query(
-//         "UPDATE task SET title = $1, deskripsi = $2, deadline = $3 WHERE id = $4",
-//         [req.body.title, req.body.deskripsi, req.body.deadline, req.params.id]
-//     );
-//     res.send("task berhasil di update");
-// });
-
-app.delete("/api/detele-student/:id", async (req, res) => {
-    await pool.query("DELETE FROM enrollment WHERE id = $1", [req.params.id]);
-    res.send("task berhasil di detele");
-});
-
-//---------------------------------MANIPULASI POSTINGAN---------------------------------
-// app.post("/api/add-post", authenticateToken, async (req, res) =>{
-//     const result = await pool.query(
-//         "INSERT INTO post (deskripsi) VALUES ($1) RETURNING *",
-//         [req.body.deskripsi]
-//     );
-//     res.json(result.rows[0]);
-// });
-
-
-// app.get("/api/post", async (req, res) => {
-//     const result = await pool.query("SELECT * FROM post");
-//     res.json(result.rows);
-// });
-
-// app.put("/api/update-post/:id", async (req, res) => {
-//     await pool.query(
-//         "UPDATE post SET deskripsi = $1 WHERE id = $3",
-//         [req.body.deskripsi, req.params.id]
-//     );
-//     res.send("post berhasil di update");
-// });
-
-
-
-// app.delete("/api/delete-post/:id", async (req, res) => {
-//     await pool.query("DELETE FROM post WHERE id = $1", [req.params.id]);
-//     res.send("post berhasil dihapus");
-//   });
-  
-
-
-
-
-
-
-
-
 
 
 
