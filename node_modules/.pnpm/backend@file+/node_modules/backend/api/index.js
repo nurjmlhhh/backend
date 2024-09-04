@@ -16,31 +16,26 @@ app.use(
 
 // Endpoint untuk Registrasi
 app.post("/api/register", async (req, res) => {
-    const validRoles = ['teacher', 'student'];
-    if (!validRoles.includes(req.body.role)) {
-        return res.status(400).send("Role tidak valid. Pilih antara 'teacher' atau 'student'.");
-    }
-
     try {
         const hash = await argon2.hash(req.body.password);
         const result = await pool.query(
-            "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING *",
-            [req.body.username, req.body.email, hash, req.body.role]
+            "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING *",
+            [req.body.username, req.body.email, hash]
         );
 
         const user = result.rows[0];
 
         // Generate JWT token
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, process.env.SECRET_KEY, {
+        const token = jwt.sign({ id: user.id, username: user.username }, process.env.SECRET_KEY, {
             expiresIn: '1h', 
         });
 
         // Set token as HTTP-only cookie
         res.cookie('token', token, {
-            httpOnly: true, // The cookie is inaccessible to JavaScript (prevents XSS attacks)
-            secure: process.env.NODE_ENV === 'production', // Send cookie over HTTPS only in production
-            maxAge: 60 * 60 * 1000, // 1 hour
-            sameSite: 'strict', // Prevent CSRF attacks
+            httpOnly: true, 
+            secure: process.env.NODE_ENV === 'production', 
+            maxAge: 60 * 60 * 1000, 
+            sameSite: 'strict', 
         });
 
         res.status(201).send("Registrasi berhasil");
@@ -68,46 +63,53 @@ function authenticateToken(req, res, next) {
 }
 
 // Middleware untuk Verifikasi Teacher
-function authenticateTeacher(req, res, next) {
-    if (req.user.role === 'teacher') {
-      next();
-    } else {
-      res.status(403).send("Hanya teacher yang bisa menambahkan kelas");
-    }
-}
+// function authenticateTeacher(req, res, next) {
+//     if (req.user.role === 'teacher') {
+//       next();
+//     } else {
+//       res.status(403).send("Hanya teacher yang bisa menambahkan kelas");
+//     }
+// }
 
 // Endpoint untuk Login
 app.post("/api/login", async (req, res) => {
     const { username, password } = req.body;
 
     try {
+        // Cari pengguna berdasarkan username
         const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
 
+            // Verifikasi kata sandi
             if (await argon2.verify(user.password, password)) {
+                // Buat token JWT tanpa 'role', karena role telah dihapus
                 const token = jwt.sign(
-                    { id: user.id, role: user.role }, 
+                    { id: user.id, username: user.username }, 
                     process.env.SECRET_KEY, 
                     { expiresIn: '1h' }
                 );
+
+                // Kirimkan token dan pesan sukses
                 res.json({
                     token,
                     message: "Login berhasil",
                 });
             } else {
+                // Jika kata sandi salah
                 res.status(401).send("Kata sandi salah");
             }
         } else {
+            // Jika pengguna tidak ditemukan
             res.status(404).send(`Pengguna dengan nama ${username} tidak ditemukan`);
         }
     } catch (error) {
+        // Tangani kesalahan yang mungkin terjadi
         console.error('Terjadi kesalahan!', error);
         res.status(500).send("Terjadi kesalahan saat login.");
     }
 });
-
 
 
 // function authenticateTeacher(req, res, next) {
@@ -119,6 +121,55 @@ app.post("/api/login", async (req, res) => {
 //   }
 
 
+//---------------------------------MANIPULASI USERS---------------------------------
+app.get("/api/users/:id", authenticateToken, async (req, res) => {
+    const result = await pool.query("SELECT * FROM users where id=$1", [req.params.id]);
+    res.json(result.rows);
+});
+
+app.put("/api/users/:id", authenticateToken, async (req, res) => {
+    try {
+        const { email, username, password } = req.body;
+        const { id } = req.params;
+
+        console.log("Update request for user ID:", id);
+        console.log("Data to update:", { email, username, password });
+
+        await pool.query(
+            "UPDATE users SET email = $1, username = $2, password = $3 WHERE id = $4",
+            [email, username, password, id]
+        );
+
+        res.status(200).json({ message: "User berhasil diupdate" });
+    } catch (error) {
+        console.error("Error updating user:", error.message);
+        res.status(500).json({ error: "Gagal memperbarui user" });
+    }
+});
+
+
+app.delete("/api/users/:id", authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        console.log("Delete request for user ID:", id);
+
+        await pool.query("DELETE FROM task WHERE id_class IN (SELECT id FROM class WHERE id_teacher = $1)", [id]);
+        await pool.query("DELETE FROM post WHERE id_class IN (SELECT id FROM class WHERE id_teacher = $1)", [id]);
+        await pool.query("DELETE FROM class WHERE id_teacher = $1", [id]);
+
+        await pool.query("DELETE FROM users WHERE id = $1", [id]);
+
+        res.status(200).json({ message: "User dan data terkait berhasil dihapus" });
+    } catch (error) {
+        console.error("Error deleting user:", error.message);
+        res.status(500).json({ error: "Gagal menghapus user" });
+    }
+});
+
+
+
+
 //---------------------------------MANIPULASI CLASS---------------------------------
 // app.post("/api/class", async (req, res) =>{
 //     const result = await pool.query(
@@ -128,7 +179,7 @@ app.post("/api/login", async (req, res) => {
 //     res.json(result.rows[0]);
 // });
 
-app.post("/api/class", authenticateToken, authenticateTeacher,async (req, res) => {
+app.post("/api/class", authenticateToken, async (req, res) => {
     const { name, kode, id_teacher } = req.body;
     const idTeacher = id_teacher; // Mengambil id_teacher dari token JWT
 
@@ -144,7 +195,7 @@ app.post("/api/class", authenticateToken, authenticateTeacher,async (req, res) =
     }
 });
 
-app.get("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
+app.get("/api/class/:id", authenticateToken, async (req, res) => {
     const result = await pool.query("SELECT * FROM class where id_teacher=$1", [req.params.id]);
     res.json(result.rows);
 });
@@ -181,7 +232,7 @@ app.put("/api/class/:id", authenticateToken, async (req, res) => {
 //     res.send("Class berhasil dihapus");
 //   });
 
-app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req, res) => {
+app.delete("/api/class/:id", authenticateToken, async (req, res) => {
     const client = await pool.connect(); // Menggunakan client untuk transaksi
 
     try {
@@ -227,6 +278,7 @@ app.delete("/api/class/:id", authenticateToken, authenticateTeacher, async (req,
         res.status(500).send("Terjadi kesalahan saat menambahkan kelas.");
     }
 });
+
 
   
 
